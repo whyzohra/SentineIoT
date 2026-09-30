@@ -112,3 +112,22 @@ python -m incident_management list --db .sentinelot-demo.sqlite3
 ```
 
 Use `python -m incident_management --help` for `view`, `update`, `investigate`, and evidence metadata commands. See [docs/incident-management.md](docs/incident-management.md) for correlation configuration, status transitions, and persistence details.
+
+## Phase 7: SOC dashboard
+
+The local React + TypeScript dashboard uses the existing asset registry and incident store through the loopback-only `dashboard_api` service. Start the API and frontend in separate terminals:
+
+```powershell
+.venv/Scripts/python.exe -m dashboard_api --db .sentinelot-incidents.sqlite3 --port 8000
+cd dashboard
+npm install
+npm run dev
+```
+
+Open the Vite URL shown in the frontend terminal. Add sample alert and incident data with:
+
+```powershell
+.venv/Scripts/python.exe -m incident_management demo network_recon --seed 7 --db .sentinelot-incidents.sqlite3
+```
+
+See [docs/soc-dashboard.md](docs/soc-dashboard.md) for dashboard views, API endpoints, and tests.
