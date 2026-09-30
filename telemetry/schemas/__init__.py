@@ -2,7 +2,6 @@
 
 from telemetry.schemas.asset import (
     Asset,
-    AssetCriticality,
     AssetStatus,
     AssetSummary,
     AssetType,

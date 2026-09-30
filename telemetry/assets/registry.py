@@ -125,9 +125,22 @@ class AssetRegistry:
             self.register_asset(asset)
 
     def register_asset(self, asset: Asset) -> None:
-        """Add or update an asset in the registry."""
+        """Add or replace an asset while preserving unique ID and IP indexes."""
+        ip_owner = self._ip_index.get(asset.ip_address)
+        if ip_owner is not None and ip_owner != asset.asset_id:
+            raise ValueError(f"IP address {asset.ip_address} is already assigned to {ip_owner}")
+        old = self._assets.get(asset.asset_id)
+        if old and old.ip_address != asset.ip_address:
+            self._ip_index.pop(old.ip_address, None)
         self._assets[asset.asset_id] = asset
         self._ip_index[asset.ip_address] = asset.asset_id
+
+    def remove_asset(self, asset_id: str) -> Optional[Asset]:
+        """Remove an asset and its IP index entry."""
+        asset = self._assets.pop(asset_id, None)
+        if asset:
+            self._ip_index.pop(asset.ip_address, None)
+        return asset
 
     def get_asset(self, asset_id: str) -> Optional[Asset]:
         """Lookup an asset by its unique asset_id."""

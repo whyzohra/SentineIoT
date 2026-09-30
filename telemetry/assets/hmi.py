@@ -9,8 +9,9 @@ from telemetry.schemas.event import EventSeverity, EventType, TelemetryEvent
 class HMISimulator:
     """Simulates Human-Machine Interface (HMI) operations in the central control room."""
 
-    def __init__(self, asset: Asset) -> None:
+    def __init__(self, asset: Asset, seed: Optional[int] = None) -> None:
         self.asset = asset
+        self.rng = random.Random(seed)
         self.active_operator = "op_smith"
         self.current_screen = "MAIN_WATER_OVERVIEW"
         self.operators = ["op_smith", "op_patel", "supervisor_jones"]
@@ -33,10 +34,10 @@ class HMISimulator:
             ("alarm_acknowledgement", "acknowledged advisory notification"),
             ("tag_view", "opened live trend telemetry monitor"),
         ]
-        action_type, desc = random.choice(interaction_types)
+        action_type, desc = self.rng.choice(interaction_types)
 
         if action_type == "screen_navigation":
-            self.current_screen = random.choice(self.screens)
+            self.current_screen = self.rng.choice(self.screens)
             msg = f"Operator {self.active_operator} {desc} [{self.current_screen}] on {self.asset.asset_id}"
             meta = {
                 "action": "SCREEN_NAVIGATION",
@@ -45,7 +46,7 @@ class HMISimulator:
             }
         elif action_type == "setpoint_adjustment":
             param = "intake_target_flow_gpm" if not target_plc or target_plc.asset_id == "PLC-001" else "target_ph"
-            val = round(random.uniform(1200.0, 1300.0), 1) if "flow" in param else round(random.uniform(7.15, 7.35), 2)
+            val = round(self.rng.uniform(1200.0, 1300.0), 1) if "flow" in param else round(self.rng.uniform(7.15, 7.35), 2)
             msg = f"Operator {self.active_operator} {desc}: set {param} = {val} on {target_plc.asset_id if target_plc else 'PLC-001'}"
             meta = {
                 "action": "SETPOINT_ADJUST",
@@ -59,7 +60,7 @@ class HMISimulator:
             msg = f"Operator {self.active_operator} {desc} on {self.asset.asset_id}"
             meta = {
                 "action": "ALARM_ACKNOWLEDGE",
-                "alarm_id": f"ALM-2026-{random.randint(100, 999)}",
+                "alarm_id": f"ALM-SIM-{self.rng.randint(100, 999)}",
                 "operator": self.active_operator,
             }
         else:
@@ -81,9 +82,9 @@ class HMISimulator:
 
     def generate_auth_event(self) -> TelemetryEvent:
         """Simulate legitimate operator authentication or shift handover."""
-        event_subtype = random.choice(["LOGIN_SUCCESS", "LOGOUT_CLEAN", "SESSION_REFRESH"])
+        event_subtype = self.rng.choice(["LOGIN_SUCCESS", "LOGOUT_CLEAN", "SESSION_REFRESH"])
         if event_subtype == "LOGIN_SUCCESS":
-            self.active_operator = random.choice(self.operators)
+            self.active_operator = self.rng.choice(self.operators)
             msg = f"Operator authentication successful: user '{self.active_operator}' logged into {self.asset.asset_id}"
             meta = {
                 "auth_method": "DOMAIN_CREDENTIAL_SMARTCARD",
@@ -96,7 +97,7 @@ class HMISimulator:
             msg = f"Operator session closed: user '{prev_user}' logged off {self.asset.asset_id}"
             meta = {
                 "user": prev_user,
-                "session_duration_minutes": random.randint(120, 480),
+                "session_duration_minutes": self.rng.randint(120, 480),
                 "result": "SUCCESS",
             }
         else:

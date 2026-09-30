@@ -1,8 +1,9 @@
 """Asset data models and schemas for SentinelOT."""
 
 from enum import Enum
+from ipaddress import IPv4Address
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field, IPvAnyAddress
+from pydantic import BaseModel, Field, field_validator
 
 
 class AssetType(str, Enum):
@@ -59,6 +60,14 @@ class Asset(BaseModel):
     protocols: List[str] = Field(default_factory=list, description="Supported industrial protocols")
     description: Optional[str] = Field(default=None, description="Human-readable description of function")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Custom operational metadata")
+
+    @field_validator("ip_address")
+    @classmethod
+    def require_private_ipv4(cls, value: str) -> str:
+        address = IPv4Address(value)
+        if not address.is_private:
+            raise ValueError("simulated assets must use a private IPv4 address")
+        return str(address)
 
     def to_summary(self) -> AssetSummary:
         """Convert asset model to a lightweight summary for event attribution."""

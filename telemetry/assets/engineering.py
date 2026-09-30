@@ -9,8 +9,9 @@ from telemetry.schemas.event import EventSeverity, EventType, TelemetryEvent
 class EngineeringSimulator:
     """Simulates maintenance activities and authorized programming actions from ENGINEERING-001."""
 
-    def __init__(self, asset: Asset) -> None:
+    def __init__(self, asset: Asset, seed: Optional[int] = None) -> None:
         self.asset = asset
+        self.rng = random.Random(seed)
         self.active_engineer = "eng_chen"
         self.engineers = ["eng_chen", "eng_rodriguez"]
 
@@ -36,12 +37,12 @@ class EngineeringSimulator:
                 {"action": "QUERY_CHASSIS_STATUS", "modules_scanned": 4, "faults_detected": 0},
             ),
         ]
-        change_type, msg, meta = random.choice(changes)
+        change_type, msg, meta = self.rng.choice(changes)
         meta.update({
             "change_type": change_type,
             "engineer": self.active_engineer,
             "tool": "Siemens TIA Portal / Rockwell Studio 5000",
-            "authorization_ticket": f"CHG-2026-{random.randint(1000, 9999)}",
+            "authorization_ticket": f"CHG-SIM-{self.rng.randint(1000, 9999)}",
         })
 
         return TelemetryEvent(
@@ -55,7 +56,7 @@ class EngineeringSimulator:
 
     def generate_auth_event(self) -> TelemetryEvent:
         """Simulate authorized engineer authentication."""
-        self.active_engineer = random.choice(self.engineers)
+        self.active_engineer = self.rng.choice(self.engineers)
         return TelemetryEvent(
             source_asset=self.asset.to_summary(),
             destination_asset=None,

@@ -9,8 +9,9 @@ from telemetry.schemas.event import EventSeverity, EventType, TelemetryEvent
 class PLCSimulator:
     """Simulates a Programmable Logic Controller (PLC) with internal registers and physical I/O."""
 
-    def __init__(self, asset: Asset) -> None:
+    def __init__(self, asset: Asset, seed: Optional[int] = None) -> None:
         self.asset = asset
+        self.rng = random.Random(seed)
         self.cpu_mode = "RUN"
         self.scan_cycle_ms = 14.5
         self.cycle_count = 0
@@ -59,37 +60,37 @@ class PLCSimulator:
         """Simulate physical process drift within nominal operating envelopes."""
         self.cycle_count += 1
         # Realistic scan cycle jitter
-        self.scan_cycle_ms = round(random.uniform(12.0, 16.5), 2)
+        self.scan_cycle_ms = round(self.rng.uniform(12.0, 16.5), 2)
 
         if self.asset.asset_id == "PLC-001":
             # Small bounded random walk
             self.registers["intake_flow_rate_gpm"] = round(
-                max(1100.0, min(1400.0, self.registers["intake_flow_rate_gpm"] + random.uniform(-15.0, 15.0))), 1
+                max(1100.0, min(1400.0, self.registers["intake_flow_rate_gpm"] + self.rng.uniform(-15.0, 15.0))), 1
             )
             self.registers["raw_water_level_pct"] = round(
-                max(50.0, min(80.0, self.registers["raw_water_level_pct"] + random.uniform(-0.4, 0.4))), 1
+                max(50.0, min(80.0, self.registers["raw_water_level_pct"] + self.rng.uniform(-0.4, 0.4))), 1
             )
             self.registers["intake_line_pressure_psi"] = round(
-                max(45.0, min(60.0, self.registers["intake_line_pressure_psi"] + random.uniform(-0.6, 0.6))), 1
+                max(45.0, min(60.0, self.registers["intake_line_pressure_psi"] + self.rng.uniform(-0.6, 0.6))), 1
             )
             self.registers["pump_101_rpm"] = round(
-                max(1720.0, min(1820.0, self.registers["pump_101_rpm"] + random.uniform(-5.0, 5.0))), 1
+                max(1720.0, min(1820.0, self.registers["pump_101_rpm"] + self.rng.uniform(-5.0, 5.0))), 1
             )
             self.registers["intake_water_temp_c"] = round(
-                max(14.0, min(19.0, self.registers["intake_water_temp_c"] + random.uniform(-0.1, 0.1))), 1
+                max(14.0, min(19.0, self.registers["intake_water_temp_c"] + self.rng.uniform(-0.1, 0.1))), 1
             )
         else:
             self.registers["dosing_ph"] = round(
-                max(6.90, min(7.60, self.registers["dosing_ph"] + random.uniform(-0.02, 0.02))), 2
+                max(6.90, min(7.60, self.registers["dosing_ph"] + self.rng.uniform(-0.02, 0.02))), 2
             )
             self.registers["turbidity_ntu"] = round(
-                max(0.20, min(0.50, self.registers["turbidity_ntu"] + random.uniform(-0.01, 0.01))), 2
+                max(0.20, min(0.50, self.registers["turbidity_ntu"] + self.rng.uniform(-0.01, 0.01))), 2
             )
             self.registers["chlorine_residual_ppm"] = round(
-                max(1.10, min(1.90, self.registers["chlorine_residual_ppm"] + random.uniform(-0.03, 0.03))), 2
+                max(1.10, min(1.90, self.registers["chlorine_residual_ppm"] + self.rng.uniform(-0.03, 0.03))), 2
             )
             self.registers["filter_differential_pressure_psi"] = round(
-                max(4.0, min(6.8, self.registers["filter_differential_pressure_psi"] + random.uniform(-0.05, 0.05))), 1
+                max(4.0, min(6.8, self.registers["filter_differential_pressure_psi"] + self.rng.uniform(-0.05, 0.05))), 1
             )
 
     def generate_sensor_reading_event(
@@ -100,7 +101,7 @@ class PLCSimulator:
         """Generate a simulated sensor reading event."""
         self.step_physics()
         if not parameter_name or parameter_name not in self.registers:
-            parameter_name = random.choice(list(self.registers.keys()))
+            parameter_name = self.rng.choice(list(self.registers.keys()))
 
         current_val = self.registers[parameter_name]
 
@@ -130,7 +131,7 @@ class PLCSimulator:
             ("Battery backup power health good", EventSeverity.INFO, {"battery_voltage": 3.65, "status": "HEALTHY"}),
             ("Routine memory checksum validated", EventSeverity.INFO, {"integrity_status": "PASS", "checksum": "0xA8F9"}),
         ]
-        msg, sev, meta = random.choice(diagnostic_types)
+        msg, sev, meta = self.rng.choice(diagnostic_types)
         meta.update({
             "cpu_mode": self.cpu_mode,
             "firmware_version": self.asset.firmware_version,

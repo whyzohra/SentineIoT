@@ -9,8 +9,9 @@ from telemetry.schemas.event import EventSeverity, EventType, TelemetryEvent
 class SCADASimulator:
     """Simulates Supervisory Control and Data Acquisition (SCADA) server operations."""
 
-    def __init__(self, asset: Asset) -> None:
+    def __init__(self, asset: Asset, seed: Optional[int] = None) -> None:
         self.asset = asset
+        self.rng = random.Random(seed)
         self.batch_id = 1001
         self.active_recipe = "STANDARD_TREATMENT_RECIPE_V4"
 
@@ -41,7 +42,7 @@ class SCADASimulator:
                 {"cycle_time_ms": 112, "active_nodes_responding": 2},
             ),
         ]
-        cmd_type, msg, meta = random.choice(commands)
+        cmd_type, msg, meta = self.rng.choice(commands)
         self.batch_id += 1
 
         meta.update({
