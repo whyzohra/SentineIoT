@@ -19,6 +19,36 @@ class AlertSeverity(str, Enum):
     CRITICAL = "CRITICAL"
 
 
+class MITREDomain(str, Enum):
+    """MITRE ATT&CK matrix domain containing a technique."""
+
+    ICS = "ICS"
+    ENTERPRISE = "ENTERPRISE"
+
+
+class MITREMappingStatus(str, Enum):
+    """Whether an alert's behavior supports a configured ATT&CK mapping."""
+
+    NOT_EVALUATED = "NOT_EVALUATED"
+    MAPPED = "MAPPED"
+    UNMAPPED = "UNMAPPED"
+
+
+class MITRETactic(BaseModel):
+    tactic_id: str
+    name: str
+    url: str
+
+
+class MITRETechniqueMapping(BaseModel):
+    technique_id: str
+    name: str
+    domain: MITREDomain
+    url: str
+    tactics: list[MITRETactic]
+    mapping_basis: str
+
+
 class SecurityAlert(BaseModel):
     """Normalized detection result that retains traceable source event IDs."""
 
@@ -34,6 +64,9 @@ class SecurityAlert(BaseModel):
     target_assets: list[AssetSummary]
     evidence: dict[str, Any]
     metadata: dict[str, Any] = Field(default_factory=dict)
+    mitre_mapping_status: MITREMappingStatus = MITREMappingStatus.NOT_EVALUATED
+    mitre_mappings: list[MITRETechniqueMapping] = Field(default_factory=list)
+    mitre_unmapped_reason: str | None = None
 
     @classmethod
     def from_rule(

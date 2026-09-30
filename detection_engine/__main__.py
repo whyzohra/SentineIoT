@@ -6,6 +6,7 @@ import sys
 
 from attack_simulator import AttackSimulation
 from detection_engine.engine import DetectionEngine
+from detection_engine.mitre import MITREMapper
 from telemetry.schemas.event import TelemetryEvent
 
 
@@ -35,7 +36,7 @@ def main() -> None:
             if args.input:
                 stream.close()
 
-    alerts = DetectionEngine().detect(events)
+    alerts = MITREMapper().enrich_many(DetectionEngine().detect(events))
     print(json.dumps({
         "event_count": len(events),
         "events": [event.to_dict() for event in events],

@@ -79,3 +79,36 @@ python -m telemetry --count 10 --interval 0 --seed 7 | python -m detection_engin
 
 Rules, thresholds, severity rationale, and configuration options are documented
 in [docs/detection-engine.md](docs/detection-engine.md).
+
+## Phase 4: MITRE ATT&CK mapping
+
+Detection alerts are enriched with structured ATT&CK techniques and tactics
+where their evidence supports a mapping. Unsupported detections carry an
+explicit unmapped reason. See [docs/mitre-mapping.md](docs/mitre-mapping.md).
+
+```powershell
+python -m detection_engine demo network_recon --seed 7
+```
+
+## Phase 5: risk engine
+
+Risk assessments score alerts with an explainable configurable formula and
+return a separate result, leaving alert records unchanged. Run the complete
+simulation-to-risk demo with:
+
+```powershell
+python -m risk_engine demo network_recon --seed 7
+```
+
+See [docs/risk-model.md](docs/risk-model.md) for weights, normalizations, and
+level boundaries.
+## Phase 6: Incident management
+
+Persist detections and risk assessments as correlated incidents in local SQLite. The CLI demo runs the complete attack simulation → detection → MITRE → risk → incident flow:
+
+```powershell
+python -m incident_management demo network_recon --seed 7 --db .sentinelot-demo.sqlite3
+python -m incident_management list --db .sentinelot-demo.sqlite3
+```
+
+Use `python -m incident_management --help` for `view`, `update`, `investigate`, and evidence metadata commands. See [docs/incident-management.md](docs/incident-management.md) for correlation configuration, status transitions, and persistence details.
