@@ -282,6 +282,7 @@ function InvestigationPage({ incident, note, setNote, onAddNote, onStatus, onRes
 }
 
 function ResponsePanel({ incident, onUpdate, onToast }: { incident: Incident; onUpdate: (incident: Incident) => void; onToast: (value: string) => void }) {
+  const responseActions = incident.response_actions ?? []
   const [playbooks, setPlaybooks] = useState<ResponsePlaybook[]>([])
   const [playbookId, setPlaybookId] = useState('')
   const [target, setTarget] = useState('')
@@ -291,10 +292,11 @@ function ResponsePanel({ incident, onUpdate, onToast }: { incident: Incident; on
   const [outcome, setOutcome] = useState<'SUCCESS' | 'FAILURE'>('SUCCESS')
   const [authorized, setAuthorized] = useState<Record<string, boolean>>({})
 
-  useEffect(() => { api.responsePlaybooks(incident.incident_id).then(items => {
+  useEffect(() => { api.responsePlaybooks(incident.incident_id).then(payload => {
+    const items = Array.isArray(payload) ? payload : []
     setPlaybooks(items)
     setPlaybookId(items[0]?.playbook_id ?? '')
-    setTarget(items[0]?.target_options[0] ?? '')
+    setTarget(items[0]?.target_options?.[0] ?? '')
   }).catch(error => onToast(error instanceof Error ? error.message : 'Response playbooks could not be loaded')) }, [incident.incident_id, onToast])
 
   const selected = playbooks.find(item => item.playbook_id === playbookId)
@@ -325,12 +327,12 @@ function ResponsePanel({ incident, onUpdate, onToast }: { incident: Incident; on
     <div className="response-safety"><b>DRY RUN ONLY</b><span>Each action stays pending until you explicitly authorize its simulation.</span></div>
     <form className="response-request" onSubmit={requestAction}>
       <label>Playbook<select aria-label="Response playbook" value={playbookId} onChange={event => { setPlaybookId(event.target.value); setTarget(playbooks.find(item => item.playbook_id === event.target.value)?.target_options[0] ?? '') }}>{playbooks.map(item => <option key={item.playbook_id} value={item.playbook_id}>{item.title}</option>)}</select></label>
-      {Boolean(selected?.target_options.length) && <label>Evidence target<select aria-label="Response target" value={target} onChange={event => setTarget(event.target.value)}>{selected?.target_options.map(option => <option key={option}>{option}</option>)}</select></label>}
+      {Boolean(selected?.target_options?.length) && <label>Evidence target<select aria-label="Response target" value={target} onChange={event => setTarget(event.target.value)}>{selected?.target_options?.map(option => <option key={option}>{option}</option>)}</select></label>}
       <label>Analyst<input aria-label="Response analyst" value={analyst} onChange={event => setAnalyst(event.target.value)} /></label>
       <label>Request reason<input aria-label="Response request reason" value={reason} onChange={event => setReason(event.target.value)} placeholder="Why is this simulation requested?" /></label>
       <button type="submit" disabled={!selected || !reason.trim() || !analyst.trim()}>Request simulation</button>
     </form>
-    {incident.response_actions.length > 0 && <div className="response-action-list">{[...incident.response_actions].reverse().map(action => <article className="response-action" key={action.action_id}>
+    {responseActions.length > 0 && <div className="response-action-list">{[...responseActions].reverse().map(action => <article className="response-action" key={action.action_id}>
       <div className="response-action-heading"><b>{action.action_type.replaceAll('_', ' ')}</b><span className={`response-status response-${action.status.toLowerCase()}`}>{action.status.replaceAll('_', ' ')}</span></div>
       <p>{action.result}</p><small>Target: {action.target ?? 'incident evidence'} · Requested by {action.analyst} · {formatTime(action.updated_at, true)}</small>
       {action.status === 'PENDING_AUTHORIZATION' && <div className="response-authorization">
@@ -343,7 +345,7 @@ function ResponsePanel({ incident, onUpdate, onToast }: { incident: Incident; on
       {action.status === 'SUCCEEDED' && <button className="response-secondary" onClick={() => void rollbackAction(action.action_id)}><RotateCcw size={12} /> Simulate rollback</button>}
       <details className="evidence-details"><summary>Simulation audit details <ChevronDown size={13} /></summary><pre>{JSON.stringify(action.result_details, null, 2)}</pre></details>
     </article>)}</div>}
-    {!incident.response_actions.length && <div className="notes-empty">No response simulations requested for this incident.</div>}
+    {!responseActions.length && <div className="notes-empty">No response simulations requested for this incident.</div>}
   </section>
 }
 

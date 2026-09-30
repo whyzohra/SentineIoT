@@ -1,6 +1,6 @@
 # Incident management
 
-SentinelOT Phase 6 groups existing `SecurityAlert` and `RiskAssessment` records into persisted incidents. The module does not change detection, MITRE enrichment, or risk scoring. Every alert and its full risk explanation is stored as a pair, so original alert fields, MITRE mappings, and evidence event IDs remain available to analysts.
+`IncidentService` groups existing `SecurityAlert` and `RiskAssessment` records into persisted incidents. The module does not change detection, MITRE enrichment, or risk scoring. Every alert and its full risk explanation is stored as a pair, so original alert fields, MITRE mappings, and evidence event IDs remain available to analysts.
 
 ## Correlation policy
 

@@ -1,0 +1,4 @@
+pydantic>=2,<3
+pytest>=8,<10
+scikit-learn>=1.6,<2
+-r aws_pipeline/requirements.txt

@@ -1,144 +1,139 @@
-# SentinelOT phase 1: simulated industrial environment
+# SentinelOT
 
-This phase provides an isolated, in-memory industrial lab with PLC-001, PLC-002,
-HMI-001, SCADA-001, and ENGINEERING-001. It generates synthetic baseline process,
-operator, engineering, and supervisory events. The simulators do not open sockets,
-connect to industrial devices, or communicate with external networks.
+**A safe, local-first security operations lab for simulated OT/ICS environments.** SentinelOT generates synthetic industrial telemetry, detects suspicious behavior, enriches supported findings with MITRE ATT&CK, scores risk, groups findings into incidents, and presents the investigation workflow in a SOC dashboard.
 
-## Start
+It is designed to demonstrate how OT security monitoring components fit together without connecting to or changing real industrial systems.
 
-Use Python 3.10+ with Pydantic 2 installed (`python -m pip install "pydantic>=2,<3"`).
-From the repository root, print 20 events and exit:
+## The problem
+
+Operational technology environments combine long-lived controllers, supervisory systems, operator activity, and network security controls. Security teams need to connect events across those layers while preserving the context analysts need to investigate. SentinelOT models a small Purdue-style lab and a repeatable security workflow so these design ideas can be explored safely and locally.
+
+## Architecture and data flow
+
+```mermaid
+flowchart LR
+  SIM["OT simulation<br/>PLCs, HMI, SCADA"] --> TEL["TelemetryEvent<br/>synthetic events"]
+  FG["FortiGate fixtures<br/>JSON, CEF, syslog"] --> TEL
+  TEL --> DET["Rule detection"]
+  TEL --> ML["Optional Isolation Forest"]
+  DET --> MITRE["MITRE ATT&CK enrichment"]
+  ML --> MITRE
+  MITRE --> RISK["Explainable risk scoring"]
+  RISK --> INC["SQLite incident management"]
+  INC --> RESP["Analyst-authorized<br/>response simulations"]
+  INC --> DASH["SOC dashboard and API"]
+  RESP --> DASH
+  TEL -. optional deployment .-> SQS["AWS SQS"]
+  SQS --> LAMBDA["Lambda"] --> EB["EventBridge"] --> DET
+  LAMBDA --> CW["CloudWatch"]
+  LAMBDA --> DDB["DynamoDB"]
+  DDB -. optional view .-> DASH
+```
+
+The local path uses synthetic telemetry and SQLite. FortiGate logs enter through a local parser/normalizer. ML is opt-in and runs beside deterministic rules. The AWS CDK stack is a separate optional deployment path; local operation and tests do not need AWS credentials or live AWS resources. See [docs/architecture.md](docs/architecture.md) for component boundaries and [docs/demo.md](docs/demo.md) for a guided run.
+
+## Capabilities
+
+- **OT simulation and telemetry:** reproducible synthetic events for PLC, HMI, SCADA, and engineering assets using the shared `TelemetryEvent` schema.
+- **Detection:** deterministic rules for network reconnaissance, authentication brute force, unauthorized PLC access, PLC command frequency, insider behavior, FortiGate IPS alerts, and FortiGate denied-traffic bursts. Thresholds and evidence are documented in [docs/detection-engine.md](docs/detection-engine.md).
+- **MITRE ATT&CK:** supported mappings are attached to alerts with tactic/technique metadata. Unsupported evidence remains explicitly unmapped. See [docs/mitre-mapping.md](docs/mitre-mapping.md).
+- **Risk engine:** separate, explainable `RiskAssessment` values score severity, confidence, asset criticality, evidence, and mapping. See [docs/risk-model.md](docs/risk-model.md).
+- **Incident management:** correlate and persist findings with SQLite; retain evidence references, analyst notes, timeline, status changes, and audit records.
+- **SOC dashboard:** local React/TypeScript views for events, alerts, assets, MITRE, incidents, and investigation. The loopback API reuses backend models and services.
+- **FortiGate telemetry:** parse synthetic JSON, CEF, and syslog-style records and normalize them into the shared event pipeline. No appliance or FortiGate credentials are used. See [docs/fortigate-integration.md](docs/fortigate-integration.md).
+- **Optional AWS pipeline:** CDK-managed SQS, Lambda, EventBridge, CloudWatch, and DynamoDB with retry/DLQ handling. Tests use local synthesis and mocks. See [docs/aws-security-telemetry.md](docs/aws-security-telemetry.md).
+- **Optional ML anomaly detection:** reproducible Isolation Forest features for command frequency and source/target behavior; findings join the existing alert pipeline with feature evidence. See [docs/ml-anomaly-detection.md](docs/ml-anomaly-detection.md).
+- **Safe incident response:** analyst-requested and separately authorized simulations for host isolation, account disablement, PLC access blocking, and evidence references. No action changes a system and detection never triggers one. See [docs/incident-response.md](docs/incident-response.md).
+
+## Safety model
+
+Everything in the default workflow is synthetic and local. The simulators create event records; they do not send attack traffic, attempt logins, issue real PLC commands, or contact an external OT environment. The FortiGate integration consumes bundled fixtures. AWS deployment is opt-in and is not needed for the local demo. Response playbooks only write simulated action, timeline, and audit records; they never invoke OS, firewall, account, network, or PLC controls. There is no automated destructive response. More detail is in [docs/security-model.md](docs/security-model.md).
+
+## Prerequisites
+
+- Python 3.10 or newer
+- Node.js 20 or newer and npm
+- Git
+- AWS credentials are **not** needed for local use or tests
+
+The ML demo additionally installs scikit-learn. CDK synthesis additionally installs the optional AWS pipeline dependencies. Neither is needed to run the core telemetry or dashboard.
+
+## Local setup
+
+From the repository root, create and activate an environment, then install the core/test and optional ML dependencies:
 
 ```powershell
-python -m telemetry --count 20 --interval 0 --seed 7
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install "pydantic>=2,<3" "pytest>=8,<10" "scikit-learn>=1.6,<2"
+cd dashboard
+npm ci
+cd ..
 ```
 
-Each line is a JSON event. Omit `--count` to stream continuously; set `--interval`
-to control the delay between events. Press Ctrl+C to stop.
+On macOS/Linux, activate with `source .venv/bin/activate`; on Windows PowerShell use the command above. Python commands below use `python` after activation. `requirements-dev.txt` also includes the optional ML/CDK dependencies so every local validation can run from one environment. To install just the core dashboard/API dependencies use `python -m pip install "pydantic>=2,<3"`, adding pytest or optional packages only when needed.
 
-## Event and asset models
+## Quick demo
 
-Events use `TelemetryEvent` in `telemetry/schemas/event.py`; serialized records
-contain `event_id`, UTC `timestamp`, `source_asset`, nullable `destination_asset`,
-`event_type`, `severity`, `message`, and structured `metadata`. Asset records in
-`telemetry/schemas/asset.py` include identity, hostname, private IPv4 address,
-type, manufacturer, firmware, criticality, and status. `AssetRegistry` seeds the
-five standard lab assets and rejects duplicate IP assignments.
-
-The in-memory generator can also be used directly:
-
-```python
-from telemetry.generator import NormalTelemetryGenerator
-
-events = NormalTelemetryGenerator(seed=7).events(count=10)
-for event in events:
-    print(event.to_json())
-```
-
-## Tests
-
-Run the phase 1 unit tests with `python -m pytest tests/unit -q`.
-
-## Phase 2: safe attack simulation
-
-Attack-shaped activity is represented only by synthetic `TelemetryEvent` records
-attributed to registered lab assets. Scenario generation does not send packets,
-attempt logins, execute PLC commands, change process state, or contact external
-systems. Each run prints `SIMULATION ONLY — SentinelOT isolated laboratory`
-before its scenario report.
-
-List scenarios and run one with a reproducible seed:
-
-```powershell
-python -m attack_simulator list
-python -m attack_simulator run network_recon --seed 7
-python -m attack_simulator run brute_force --seed 7 --count 5
-python -m attack_simulator run unauthorized_plc --seed 7
-python -m attack_simulator run plc_anomaly --seed 7 --count 3
-python -m attack_simulator run insider_anomaly --seed 7
-```
-
-`--count` controls the number of synthetic events (each scenario has a default).
-The command prints scenario details and schema-shaped events as JSON. Run all
-unit tests with `python -m pytest tests/unit -q`.
-
-## Phase 3: rule-based detection
-
-The detection engine consumes the same telemetry event schema and emits
-structured alerts with traceable source event IDs. Run an end-to-end demo or
-feed JSONL events from the baseline simulator into detection:
-
-```powershell
-python -m detection_engine demo network_recon --seed 7
-python -m detection_engine demo brute_force --seed 7 --count 12
-python -m detection_engine demo unauthorized_plc --seed 7 --count 5
-python -m detection_engine demo insider_anomaly --seed 7
-python -m telemetry --count 10 --interval 0 --seed 7 | python -m detection_engine detect
-```
-
-Rules, thresholds, severity rationale, and configuration options are documented
-in [docs/detection-engine.md](docs/detection-engine.md).
-
-## Phase 4: MITRE ATT&CK mapping
-
-Detection alerts are enriched with structured ATT&CK techniques and tactics
-where their evidence supports a mapping. Unsupported detections carry an
-explicit unmapped reason. See [docs/mitre-mapping.md](docs/mitre-mapping.md).
-
-```powershell
-python -m detection_engine demo network_recon --seed 7
-```
-
-## Phase 5: risk engine
-
-Risk assessments score alerts with an explainable configurable formula and
-return a separate result, leaving alert records unchanged. Run the complete
-simulation-to-risk demo with:
-
-```powershell
-python -m risk_engine demo network_recon --seed 7
-```
-
-See [docs/risk-model.md](docs/risk-model.md) for weights, normalizations, and
-level boundaries.
-## Phase 6: Incident management
-
-Persist detections and risk assessments as correlated incidents in local SQLite. The CLI demo runs the complete attack simulation → detection → MITRE → risk → incident flow:
+Generate a deterministic simulation report:
 
 ```powershell
 python -m incident_management demo network_recon --seed 7 --db .sentinelot-demo.sqlite3
-python -m incident_management list --db .sentinelot-demo.sqlite3
 ```
 
-Use `python -m incident_management --help` for `view`, `update`, `investigate`, and evidence metadata commands. See [docs/incident-management.md](docs/incident-management.md) for correlation configuration, status transitions, and persistence details.
-
-## Phase 7: SOC dashboard
-
-The local React + TypeScript dashboard uses the existing asset registry and incident store through the loopback-only `dashboard_api` service. Start the API and frontend in separate terminals:
+Start the API and dashboard in separate terminals from the repository root:
 
 ```powershell
-.venv/Scripts/python.exe -m dashboard_api --db .sentinelot-incidents.sqlite3 --port 8000
+# Terminal 1: API binds to loopback only
+python -m dashboard_api --db .sentinelot-demo.sqlite3 --port 8000
+```
+
+```powershell
+# Terminal 2
 cd dashboard
-npm install
 npm run dev
 ```
 
-Open the Vite URL shown in the frontend terminal. Add sample alert and incident data with:
+Open the local Vite URL (normally `http://127.0.0.1:5173`), select the incident, and review its alerts, risk factors, ATT&CK context, timeline, and audit history. The dashboard's investigation view also supports the separately authorized response simulations. A complete walkthrough, including FortiGate and optional ML demos, is in [docs/demo.md](docs/demo.md).
+
+## Validation
+
+Run the full Python suite and frontend checks from the repository root:
 
 ```powershell
-.venv/Scripts/python.exe -m incident_management demo network_recon --seed 7 --db .sentinelot-incidents.sqlite3
+python -m pytest tests/unit -q
+cd dashboard
+npm test
+npm run build
+cd ..
 ```
 
-See [docs/soc-dashboard.md](docs/soc-dashboard.md) for dashboard views, API endpoints, and tests.
-
-## Optional ML anomaly detection
-
-The opt-in local ML layer trains an Isolation Forest on deterministic synthetic OT events and routes labeled findings through the existing alert, MITRE, risk, and incident pipeline. Install its separate dependency and run the local demo with:
+Validate the optional AWS stack without deploying it:
 
 ```powershell
-python -m pip install -r ml_detection/requirements.txt
-python -m ml_detection demo --seed 7
+python -m pip install -r aws_pipeline/requirements.txt
+python aws_pipeline/app.py
 ```
 
-See [docs/ml-anomaly-detection.md](docs/ml-anomaly-detection.md) for features, evidence, model limitations, and training commands.
+CDK synthesis writes templates under `aws_pipeline/cdk.out`; it does not create cloud resources. Then check whitespace and inspect the final changes:
+
+```powershell
+git diff --check
+git status --short
+```
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Demo walkthrough](docs/demo.md)
+- [Security model and limitations](docs/security-model.md)
+- [Detection rules](docs/detection-engine.md)
+- [MITRE ATT&CK mapping](docs/mitre-mapping.md)
+- [Risk model](docs/risk-model.md)
+- [Incident management](docs/incident-management.md)
+- [FortiGate integration](docs/fortigate-integration.md)
+- [AWS security telemetry](docs/aws-security-telemetry.md)
+- [ML anomaly detection](docs/ml-anomaly-detection.md)
+- [Safe incident response](docs/incident-response.md)
+- [Portfolio and interview notes](docs/portfolio.md)

@@ -1,10 +1,17 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.env
+.env.*
+!.env.example
 .venv/
 node_modules/
 dashboard/node_modules/
 dashboard/dist/
+dashboard/tsconfig.tsbuildinfo
+*.sqlite
+*.sqlite3
+*.db
 aws_pipeline/layer/python/*
 !aws_pipeline/layer/python/.gitkeep
 aws_pipeline/cdk.out/
