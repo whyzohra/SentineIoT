@@ -94,6 +94,8 @@ def create_server(database: str, port: int = 8000) -> ThreadingHTTPServer:
                         actor=str(body.get("actor", "dashboard analyst")),
                     )
                     result = incident.model_dump(mode="json")
+                elif route == "/api/fortigate/demo":
+                    result = data.ingest_fortigate_demo()
                 else:
                     self._send(404, {"error": "Endpoint not found"})
                     return
@@ -128,4 +130,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -24,6 +24,7 @@ export const api = {
   incident: (id: string) => request<Incident>(`/incidents/${encodeURIComponent(id)}`),
   assets: (search = '') => request<Asset[]>(`/assets${query({ search })}`),
   techniques: () => request<Array<MitreMapping & { alert_count: number; alert_ids: string[]; incident_ids: string[] }>>('/mitre'),
+  fortigateDemo: () => request<{ events: TelemetryEvent[]; alerts: AlertRecord[]; incident_ids: string[] }>('/fortigate/demo', { method: 'POST', body: '{}' }),
   updateStatus: (id: string, status: IncidentStatus) => request<Incident>(`/incidents/${encodeURIComponent(id)}/status`, {
     method: 'POST', body: JSON.stringify({ status, actor: 'soc analyst' }),
   }),

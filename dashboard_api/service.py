@@ -7,6 +7,8 @@ from typing import Any
 from incident_management import IncidentService, IncidentStatus, SQLiteIncidentRepository
 from telemetry.assets import AssetRegistry
 from telemetry.generator import NormalTelemetryGenerator
+from fortigate.pipeline import process_logs
+from pathlib import Path
 
 
 ACTIVE_STATES = {IncidentStatus.OPEN, IncidentStatus.INVESTIGATING, IncidentStatus.CONTAINED}
@@ -41,6 +43,15 @@ class DashboardDataService:
     def _generate_events(self, count: int) -> None:
         with self._event_lock:
             self._events.extend(event.to_dict() for event in self.telemetry.events(count))
+
+    def ingest_fortigate_demo(self) -> dict[str, Any]:
+        fixture = Path(__file__).parents[1] / "fortigate" / "fixtures" / "demo.jsonl"
+        result = process_logs(fixture.read_text(encoding="utf-8").splitlines(), incident_service=self.incidents)
+        with self._event_lock:
+            self._events.extend(event.to_dict() for event in result["events"])
+        return {"events": [event.model_dump(mode="json") for event in result["events"]],
+                "alerts": [alert.model_dump(mode="json") for alert in result["alerts"]],
+                "incident_ids": [incident.incident_id for incident in result["incidents"]]}
 
     def events(self, *, limit: int = 100, search: str = "") -> list[dict[str, Any]]:
         self._generate_events(5)

@@ -109,4 +109,13 @@ def test_status_note_filters_and_missing_incident_errors(api_server):
     assert bad_transition.value.code == 400
 
 
+def test_fortigate_demo_endpoint_exposes_events_and_incidents(api_server):
+    result = post_json(api_server, "/api/fortigate/demo", {})
+    assert result["events"][0]["metadata"]["integration"] == "fortigate"
+    assert result["alerts"]
+    assert result["incident_ids"]
+    assert get_json(api_server, "/api/events?search=FortiGate")
+    assert get_json(api_server, "/api/alerts?search=FortiGate")
+
+
 _SERVERS = {}

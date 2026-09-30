@@ -1,0 +1,5 @@
+[
+  {"logid":"0000000013","type":"traffic","subtype":"forward","srcip":"198.51.100.25","dstip":"192.168.10.11","action":"deny","policyid":"17","service":"MODBUS"},
+  "CEF:0|Fortinet|FortiGate|7.4|0000000013|Traffic Denied|5|type=traffic subtype=forward src=198.51.100.25 dst=192.168.10.11 act=deny logid=0000000013",
+  "<189>date=2026-09-30 time=12:00:00 devname=FG-LAB type=event subtype=vpn logid=0101039944 srcip=198.51.100.25 user=labuser action=login result=success"
+]
