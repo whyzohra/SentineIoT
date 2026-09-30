@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from detection_engine.models.alert import AlertSeverity, SecurityAlert
 from risk_engine.models.assessment import RiskAssessment, RiskLevel
+from incident_management.models.response import ResponseAction
 
 
 class IncidentStatus(str, Enum):
@@ -79,6 +80,7 @@ class Incident(BaseModel):
     analyst_notes: list[IncidentNote] = Field(default_factory=list)
     evidence_attachments: list[EvidenceAttachment] = Field(default_factory=list)
     audit_trail: list[AuditRecord] = Field(default_factory=list)
+    response_actions: list[ResponseAction] = Field(default_factory=list)
 
     @staticmethod
     def utc_now() -> datetime:

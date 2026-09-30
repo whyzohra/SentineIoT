@@ -12,6 +12,7 @@ from telemetry.assets import AssetRegistry
 from telemetry.generator import NormalTelemetryGenerator
 from fortigate.pipeline import process_logs
 from pathlib import Path
+from incident_response import IncidentResponseService
 
 
 ACTIVE_STATES = {IncidentStatus.OPEN, IncidentStatus.INVESTIGATING, IncidentStatus.CONTAINED}
@@ -25,6 +26,7 @@ class DashboardDataService:
         self.repository = repository
         self.aws_table = aws_table
         self.incidents = IncidentService(repository)
+        self.response = IncidentResponseService(self.incidents)
         self.assets = AssetRegistry()
         self.telemetry = NormalTelemetryGenerator(self.assets, seed=2026)
         self._events: deque[dict[str, Any]] = deque(maxlen=200)
@@ -47,6 +49,24 @@ class DashboardDataService:
     def _generate_events(self, count: int) -> None:
         with self._event_lock:
             self._events.extend(event.to_dict() for event in self.telemetry.events(count))
+
+    def response_playbooks(self, incident_id: str) -> list[dict[str, Any]]:
+        return [item.model_dump(mode="json") for item in self.response.available_playbooks(incident_id)]
+
+    def request_response(self, incident_id: str, playbook_id: str, *, analyst: str, reason: str,
+                         target: str | None = None):
+        return self.response.request_action(incident_id, playbook_id, analyst=analyst, reason=reason, target=target)
+
+    def authorize_response(self, incident_id: str, action_id: str, *, analyst: str,
+                           authorized: bool, reason: str, outcome):
+        return self.response.authorize_and_execute(incident_id, action_id, analyst=analyst,
+                                                  authorized=authorized, reason=reason, outcome=outcome)
+
+    def cancel_response(self, incident_id: str, action_id: str, *, analyst: str, reason: str):
+        return self.response.cancel(incident_id, action_id, analyst=analyst, reason=reason)
+
+    def rollback_response(self, incident_id: str, action_id: str, *, analyst: str, reason: str):
+        return self.response.rollback(incident_id, action_id, analyst=analyst, reason=reason)
 
     def _cloud_records(self, record_type: str) -> list[dict[str, Any]]:
         if self.aws_table is None:

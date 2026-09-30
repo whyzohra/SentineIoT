@@ -37,3 +37,6 @@ python -m incident_management attach INCIDENT_ID --label "analyst reference" --m
 ```
 
 The `demo` command executes the local synthetic flow: attack simulation → detection → MITRE enrichment → risk assessment → incident ingestion. The `list`, `view`, `update`, and `investigate` commands can run in separate CLI invocations against the same database.
+# Safe simulated responses
+
+Incident details now retain analyst-requested, explicitly authorized response simulations in `response_actions`, the timeline, and the audit trail. See [incident-response.md](incident-response.md) for the playbook targets, authorization workflow, state transitions, endpoints, and safety boundaries. Detection never starts a response action.

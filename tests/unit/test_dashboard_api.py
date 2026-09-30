@@ -118,4 +118,40 @@ def test_fortigate_demo_endpoint_exposes_events_and_incidents(api_server):
     assert get_json(api_server, "/api/alerts?search=FortiGate")
 
 
+def test_response_api_requires_authorization_and_persists_simulated_audit(api_server):
+    from urllib.parse import urlsplit
+    from incident_response.fixtures import seeded_incident
+    incident = seeded_incident(_SERVERS[urlsplit(api_server).port].dashboard_repository)
+    plans = get_json(api_server, f"/api/incidents/{incident.incident_id}/response-playbooks")
+    playbook = next(item for item in plans if item["playbook_id"] == "collect-evidence")
+    pending = post_json(api_server, f"/api/incidents/{incident.incident_id}/responses", {
+        "playbook_id": playbook["playbook_id"], "analyst": "soc analyst", "reason": "Capture synthetic evidence",
+    })
+    action = pending["response_actions"][0]
+    assert action["status"] == "PENDING_AUTHORIZATION"
+    request = Request(f"{api_server}/api/incidents/{incident.incident_id}/responses/{action['action_id']}/authorize",
+                      data=json.dumps({"authorized": False, "analyst": "soc analyst", "reason": "Not approved"}).encode(),
+                      headers={"Content-Type": "application/json"}, method="POST")
+    with pytest.raises(HTTPError) as denied:
+        urlopen(request, timeout=3)
+    assert denied.value.code == 400
+    pending = get_json(api_server, f"/api/incidents/{incident.incident_id}")
+    assert pending["response_actions"][0]["status"] == "PENDING_AUTHORIZATION"
+
+    executed = post_json(api_server, f"/api/incidents/{incident.incident_id}/responses/{action['action_id']}/authorize", {
+        "authorized": True, "analyst": "soc analyst", "reason": "Approved dry run",
+        "simulation_outcome": "SUCCESS",
+    })
+    assert executed["response_actions"][0]["status"] == "SUCCEEDED"
+    assert executed["response_actions"][0]["result_details"]["side_effects_performed"] is False
+    rolled_back = post_json(api_server, f"/api/incidents/{incident.incident_id}/responses/{action['action_id']}/rollback", {
+        "analyst": "soc analyst", "reason": "Rollback tabletop simulation",
+    })
+    assert rolled_back["response_actions"][0]["status"] == "ROLLED_BACK"
+    assert {row["action"] for row in rolled_back["audit_trail"]} >= {
+        "SIMULATED_RESPONSE_REQUESTED", "SIMULATED_RESPONSE_AUTHORIZATION_DENIED",
+        "SIMULATED_RESPONSE_AUTHORIZED", "SIMULATED_RESPONSE_ROLLED_BACK",
+    }
+
+
 _SERVERS = {}

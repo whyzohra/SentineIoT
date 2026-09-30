@@ -8,7 +8,7 @@ from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from incident_management import SQLiteIncidentRepository
-from incident_management.models import IncidentStatus
+from incident_management.models import IncidentStatus, SimulatedOutcome
 from dashboard_api.service import DashboardDataService
 
 
@@ -62,6 +62,9 @@ def create_server(database: str, port: int = 8000, security_table_name: str | No
                     result = data.incidents_list(
                         search=value("search"), status=value("status"), severity=value("severity"),
                     )
+                elif route.path.startswith("/api/incidents/") and route.path.endswith("/response-playbooks"):
+                    incident_id = unquote(route.path.removeprefix("/api/incidents/").removesuffix("/response-playbooks").strip("/"))
+                    result = data.response_playbooks(incident_id)
                 elif route.path.startswith("/api/incidents/"):
                     incident_id = unquote(route.path.removeprefix("/api/incidents/"))
                     result = data.incident(incident_id)
@@ -98,6 +101,36 @@ def create_server(database: str, port: int = 8000, security_table_name: str | No
                     incident = data.add_incident_note(
                         incident_id, str(body.get("text", "")),
                         actor=str(body.get("actor", "dashboard analyst")),
+                    )
+                    result = incident.model_dump(mode="json")
+                elif route.startswith("/api/incidents/") and "/responses/" in route:
+                    parts = [unquote(part) for part in route.strip("/").split("/")]
+                    if len(parts) != 6 or parts[0:2] != ["api", "incidents"] or parts[3] != "responses":
+                        self._send(404, {"error": "Endpoint not found"})
+                        return
+                    incident_id, action_id, operation = parts[2], parts[4], parts[5]
+                    analyst = str(body.get("analyst", ""))
+                    reason = str(body.get("reason", ""))
+                    if operation == "authorize":
+                        incident = data.authorize_response(
+                            incident_id, action_id, analyst=analyst,
+                            authorized=body.get("authorized") is True, reason=reason,
+                            outcome=SimulatedOutcome(body.get("simulation_outcome", "SUCCESS")),
+                        )
+                    elif operation == "cancel":
+                        incident = data.cancel_response(incident_id, action_id, analyst=analyst, reason=reason)
+                    elif operation == "rollback":
+                        incident = data.rollback_response(incident_id, action_id, analyst=analyst, reason=reason)
+                    else:
+                        self._send(404, {"error": "Endpoint not found"})
+                        return
+                    result = incident.model_dump(mode="json")
+                elif route.startswith("/api/incidents/") and route.endswith("/responses"):
+                    incident_id = unquote(route.removeprefix("/api/incidents/").removesuffix("/responses").strip("/"))
+                    incident = data.request_response(
+                        incident_id, str(body.get("playbook_id", "")),
+                        analyst=str(body.get("analyst", "")), reason=str(body.get("reason", "")),
+                        target=str(body["target"]) if body.get("target") else None,
                     )
                     result = incident.model_dump(mode="json")
                 elif route == "/api/fortigate/demo":

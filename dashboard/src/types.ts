@@ -102,6 +102,37 @@ export interface Incident {
   analyst_notes: IncidentNote[]
   evidence_attachments: Array<{ attachment_id: string; timestamp: string; actor: string; label: string; metadata: Record<string, unknown> }>
   audit_trail: AuditRecord[]
+  response_actions: ResponseAction[]
+}
+
+export type ResponseActionStatus = 'PENDING_AUTHORIZATION' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'ROLLED_BACK'
+export interface ResponseAction {
+  action_id: string
+  incident_id: string
+  playbook_id: string
+  action_type: string
+  target?: string | null
+  status: ResponseActionStatus
+  simulation_only: boolean
+  created_at: string
+  updated_at: string
+  authorized_at?: string | null
+  completed_at?: string | null
+  analyst: string
+  authorized_by?: string | null
+  reason: string
+  authorization_reason?: string | null
+  simulation_outcome?: 'SUCCESS' | 'FAILURE' | null
+  result: string
+  result_details: Record<string, unknown>
+}
+export interface ResponsePlaybook {
+  playbook_id: string
+  title: string
+  description: string
+  action_type: string
+  target_options: string[]
+  safety_boundary: string
 }
 
 export interface TelemetryEvent {

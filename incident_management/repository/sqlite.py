@@ -12,7 +12,8 @@ from detection_engine.models.alert import AlertSeverity, SecurityAlert
 from incident_management.correlation.engine import IncidentCorrelationEngine
 from incident_management.models import (
     AuditRecord, CorrelationConfig, EvidenceAttachment, Incident,
-    IncidentAlertRecord, IncidentNote, IncidentStatus, TimelineEntry,
+    IncidentAlertRecord, IncidentNote, IncidentStatus, ResponseAction,
+    ResponseActionStatus, TimelineEntry,
 )
 from risk_engine.models.assessment import RiskAssessment, RiskLevel
 
@@ -120,6 +121,13 @@ class SQLiteIncidentRepository:
                     timestamp TEXT NOT NULL, actor TEXT NOT NULL, action TEXT NOT NULL,
                     old_status TEXT, new_status TEXT, reason TEXT, details_json TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS incident_response_actions (
+                    action_id TEXT PRIMARY KEY,
+                    incident_id TEXT NOT NULL REFERENCES incidents(incident_id),
+                    action_json TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS ix_incident_response_actions_incident
+                    ON incident_response_actions(incident_id);
             """)
 
     def _transaction(self):
@@ -252,6 +260,10 @@ class SQLiteIncidentRepository:
         audit_rows = self._connection.execute(
             "SELECT * FROM incident_audit WHERE incident_id=? ORDER BY timestamp,audit_id", (incident_id,)
         ).fetchall()
+        response_rows = self._connection.execute(
+            "SELECT action_json FROM incident_response_actions WHERE incident_id=? ORDER BY rowid",
+            (incident_id,),
+        ).fetchall()
         records = [IncidentAlertRecord(
             alert=SecurityAlert.model_validate_json(item["alert_json"]),
             risk_assessment=RiskAssessment.model_validate_json(item["risk_json"]),
@@ -280,7 +292,40 @@ class SQLiteIncidentRepository:
                 new_status=IncidentStatus(item["new_status"]) if item["new_status"] else None,
                 reason=item["reason"], details=json.loads(item["details_json"]),
             ) for item in audit_rows],
+            response_actions=[ResponseAction.model_validate_json(item["action_json"]) for item in response_rows],
         )
+
+    def record_response_action(
+        self, incident_id: str, action: ResponseAction, *,
+        timeline: TimelineEntry, audit: AuditRecord,
+        expected_status: ResponseActionStatus | None = None,
+    ) -> Incident:
+        """Persist one simulated action and its audit entries atomically."""
+        if action.incident_id != incident_id:
+            raise ValueError("Response action incident ID does not match the incident")
+        with self._lock, self._connection:
+            self._require(incident_id)
+            row = self._connection.execute(
+                "SELECT action_json FROM incident_response_actions WHERE action_id=? AND incident_id=?",
+                (action.action_id, incident_id),
+            ).fetchone()
+            if row is None and expected_status is not None:
+                raise KeyError(f"Response action not found: {action.action_id}")
+            if row is not None:
+                previous = ResponseAction.model_validate_json(row["action_json"])
+                if expected_status is None or previous.status != expected_status:
+                    raise ValueError("Response action status changed; reload before continuing")
+                self._connection.execute("UPDATE incident_response_actions SET action_json=? WHERE action_id=?",
+                                         (action.model_dump_json(), action.action_id))
+            else:
+                self._connection.execute("INSERT INTO incident_response_actions VALUES (?,?,?)",
+                                         (action.action_id, incident_id, action.model_dump_json()))
+            now = _now()
+            self._connection.execute("UPDATE incidents SET updated_at=? WHERE incident_id=?",
+                                     (now.isoformat(), incident_id))
+            self._timeline(incident_id, timeline)
+            self._audit(incident_id, audit)
+            return self._require(incident_id)
 
     def transition(
         self, incident_id: str, status: IncidentStatus, *, actor: str, reason: str | None
