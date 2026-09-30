@@ -131,3 +131,14 @@ Open the Vite URL shown in the frontend terminal. Add sample alert and incident 
 ```
 
 See [docs/soc-dashboard.md](docs/soc-dashboard.md) for dashboard views, API endpoints, and tests.
+
+## Optional ML anomaly detection
+
+The opt-in local ML layer trains an Isolation Forest on deterministic synthetic OT events and routes labeled findings through the existing alert, MITRE, risk, and incident pipeline. Install its separate dependency and run the local demo with:
+
+```powershell
+python -m pip install -r ml_detection/requirements.txt
+python -m ml_detection demo --seed 7
+```
+
+See [docs/ml-anomaly-detection.md](docs/ml-anomaly-detection.md) for features, evidence, model limitations, and training commands.

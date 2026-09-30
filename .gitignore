@@ -5,3 +5,8 @@ __pycache__/
 node_modules/
 dashboard/node_modules/
 dashboard/dist/
+aws_pipeline/layer/python/*
+!aws_pipeline/layer/python/.gitkeep
+aws_pipeline/cdk.out/
+cdk.out/
+.sentinelot-*.joblib

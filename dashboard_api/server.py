@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -11,9 +12,14 @@ from incident_management.models import IncidentStatus
 from dashboard_api.service import DashboardDataService
 
 
-def create_server(database: str, port: int = 8000) -> ThreadingHTTPServer:
+def create_server(database: str, port: int = 8000, security_table_name: str | None = None) -> ThreadingHTTPServer:
     repository = SQLiteIncidentRepository(database)
-    data = DashboardDataService(repository)
+    table_name = security_table_name or os.environ.get("SENTINELOT_AWS_TABLE")
+    aws_table = None
+    if table_name:
+        import boto3
+        aws_table = boto3.resource("dynamodb").Table(table_name)
+    data = DashboardDataService(repository, aws_table=aws_table)
 
     class RequestHandler(BaseHTTPRequestHandler):
         server_version = "SentinelOTDashboard/1.0"
@@ -82,14 +88,14 @@ def create_server(database: str, port: int = 8000) -> ThreadingHTTPServer:
                 if route.startswith("/api/incidents/") and route.endswith("/status"):
                     incident_id = unquote(route.removeprefix("/api/incidents/").removesuffix("/status").strip("/"))
                     status = IncidentStatus(body.get("status", ""))
-                    incident = data.incidents.update_status(
+                    incident = data.update_incident_status(
                         incident_id, status, actor=str(body.get("actor", "dashboard analyst")),
                         reason=body.get("reason"),
                     )
                     result = incident.model_dump(mode="json")
                 elif route.startswith("/api/incidents/") and route.endswith("/notes"):
                     incident_id = unquote(route.removeprefix("/api/incidents/").removesuffix("/notes").strip("/"))
-                    incident = data.incidents.add_note(
+                    incident = data.add_incident_note(
                         incident_id, str(body.get("text", "")),
                         actor=str(body.get("actor", "dashboard analyst")),
                     )
